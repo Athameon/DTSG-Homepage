@@ -1,0 +1,347 @@
+<?php
+require 'wp-includes/class.DBConnector.php';
+require 'wp-includes/pluggable.php';
+
+$dbConnection = (new DBConnector)->createDbConnection();
+
+session_start();
+if(!isset($_SESSION['userid'])) {
+	#die('Um dich zu dem Wettbewert anzumelden <a href="../login/?pre=rennanmeldung">einloggen</a>');
+	header("Location: login/?pre=rennanmeldung");
+}
+else if(isset($_GET['code'])) 
+{
+	confirmTeampartnerParticipant($dbConnection);
+}
+else if(isset($_GET['postMessage'])) 
+{		
+	processRaceRegistration($dbConnection);
+}
+
+$dbConnection->close();
+//------------------
+function confirmTeampartnerParticipant($dbConnection)
+{
+	$code = $_GET['code'];
+	$userID = $_SESSION['userid'];
+	
+	$query = "UPDATE registrations 
+					  Set confirmed='1', Teilnehmer2_ID='$userID', Teilnehmer2_Email=''
+					  WHERE code = '$code'";
+	$statement = $dbConnection->query($query);
+
+	if($statement) 
+	{		
+		echo "Hiermit hast du deine Einladung zum Rennen bestaetigt.<br>Weiter zum <a href='../intern'>Homescreen<a>";
+		
+		$participent1Query = $dbConnection->query("SELECT * FROM registrations, teilnehmer WHERE registrations.Teilnehmer1_ID = teilnehmer.ID AND code = '$code'");
+		if ($participent1Query->num_rows > 0) 
+		{
+			$participent1 = $participent1Query->fetch_assoc();
+			sendMail($participent1, "", $dbConnection, "", "");
+		}
+	} 
+	else 
+	{
+		echo 'Beim Bestaetigen ist leider ein Fehler aufgetreten. Bitte wende dich zur Klaering an sporttrampen@gmail.com.<br>';
+	}
+	die();
+}
+function processRaceRegistration($dbConnection)
+{
+	$OK = 0;
+	$securityCodeForTeampartner = generateRandomString();
+
+	//TODO: check whether participent is already registered for this race
+	checkDoubleRegistration($dbConnection);
+
+
+	$OK += insertRaceRegistrationIntoDB($_POST["race_id"], $_POST["team"], $_POST["selection"], $_POST["emailaddress"], $dbConnection, $securityCodeForTeampartner);
+	
+	$participant1 = getParticipantObject($dbConnection, $_SESSION['userid']);
+	
+	if ($_POST["team"] == "single") 
+	{
+		$OK++;
+	}
+	else //If team
+	{
+		if($_POST["selection"] == '0' && $_POST["emailaddress"] != "")	//If not user selected, but E-Mail of Teampartner
+		{
+			$OK += sendMail($participant1, $_POST["emailaddress"], $dbConnection, $securityCodeForTeampartner, $_POST["race_id"]);
+			if($OK == 2)
+			{
+				echo "Dein Teampartner hat soeben eine E-Mail bekommen und muss die Einladung noch bestaetigen<br>";
+			}
+		}
+		else if($_POST["selection"] != '0')	//If not single, but E-Mail of Teampartner is provided
+		{
+			$participant2 = getParticipantObject($dbConnection, $_POST["selection"]);
+			$OK += sendMail($participant1, $participant2["email"], $dbConnection, $securityCodeForTeampartner, $_POST["race_id"]);
+			if($OK == 2)
+			{
+				echo "Dein Teampartner hat soeben eine E-Mail bekommen und muss die Einladung noch bestätigen<br>";
+			}
+		}
+	}
+
+		
+	$OK += sendMail($participant1, $participant1['email'], $dbConnection, '0', $_POST["race_id"]);	//Confirmationsmail for participant and sporttrampen@gmail.com
+	
+	if($OK == 3)
+	{	
+		echo "Deine Anmeldung wurde erfolgreich abgeschickt.<br>";
+		die("Zur Bestätigung haben wir dir soeben eine E-Mail geschickt.<br> Zurueck zum <a href='../intern'>Internen bereich</a>");
+	}
+	else
+	{
+		die("ERROR: Bei deiner Anmeldung ist etwas schief gegangen. Bitte wende dich an sporttrampen@gmail.com");
+	}
+}
+
+function generateRandomString($length = 10) {
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $charactersLength = strlen($characters);
+    $randomString = '';
+    for ($i = 0; $i < $length; $i++) {
+        $randomString .= $characters[rand(0, $charactersLength - 1)];
+    }
+    return $randomString;
+}
+
+function checkDoubleRegistration($dbConnection)
+{
+	$userId = $_SESSION['userid'];
+	$raceId = $_POST["race_id"];
+	$query = "SELECT * FROM `registrations` WHERE (`Teilnehmer1_ID` = '$userId' || `Teilnehmer2_ID` = '$userId') && Event_ID = '$raceId'";
+	$participent2Query = $dbConnection->query($query);
+
+	if ($participent2Query->num_rows > 0) 
+	{
+		die("Du bist bereits fuer das Rennen angemeldet und kannst dich kein weiteres mal anmelden. Weiter zum <a href='../intern'>internen Bereich</a>");
+	}
+}
+
+function insertRaceRegistrationIntoDB($raceID, $isTeam, $partnerID, $partnerMail, $dbConnection, $code)
+{
+	$userID = $_SESSION['userid'];
+	if($isTeam == "team")
+	{
+		$query = "INSERT INTO registrations (Event_ID, Teilnehmer1_ID,  Teilnehmer2_ID, Teilnehmer2_Email, code) VALUES ('$raceID', '$userID', '$partnerID', '$partnerMail', '$code')";
+	}
+	else
+	{
+		$query = "INSERT INTO registrations (Event_ID, Teilnehmer1_ID) VALUES ('$raceID', '$userID')";
+	}
+	$result = $dbConnection->query($query);//
+	if($result) {		
+		return 1;
+	} else {
+		echo 'ERROR: Beim Abspeichern in die Datenbank ist leider ein Fehler aufgetreten<br>';
+		return 0;
+	}
+}
+
+function getParticipantObject($dbConnection, $participantID)
+{
+	$participent2Query = $dbConnection->query("SELECT * FROM teilnehmer WHERE ID = '$participantID'");
+	if ($participent2Query->num_rows > 0) 
+	{
+		return $participent2Query->fetch_assoc();
+	}
+}
+
+function wpdocs_set_html_mail_content_type() 
+{
+	return 'text/html';
+}
+
+
+function sendMail($participent1, $address, $dbConnection, $code, $raceID)
+{
+	$racesubject = "";
+	if($code != "")
+	{
+		$race = getRaceObject($dbConnection, $raceID);
+		$startdate = (new DateTime($race['Startdate']))->format('d.m.Y');
+		$enddate = (new DateTime($race['Enddate']))->format('d.m.Y');
+		$racesubject = $race['Name']." ($startdate - $enddate)";
+	}
+	else
+	{
+		$address = $participent1["email"];
+	}
+	#$from = $participent1['email'];
+	$name = $participent1['name'];
+
+	if($code == '0')
+	{
+		$subject = "Teilnahmebestätigung zum DTSG Rennen $racesubject";
+		$msg = createHTMLConfirmation($name);
+		
+		add_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+		wp_mail($address, $subject, $msg);
+		remove_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+	}
+	else if($code != "")
+	{
+		$subject = "Einladung zum DTSG-Rennen $racesubject";
+		$msg = createHTMLInvitation($name, $code);
+		
+		add_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+		wp_mail($address, $subject, $msg);
+		remove_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+	}
+	else
+	{
+		$subject = "Registrierungsbestaetigung deines Teampartners";
+		$msg = "Hallo $name,<br>Dein Teampartner hat soeben deine Renneinladung bestätigt.<br><br>Deine DTSG";
+		add_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+		wp_mail($address, $subject, $msg);
+		remove_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+	}
+
+	add_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+	wp_mail("sporttrampen@gmail.com", "Registrierung eines Teilnehmers", "Soeben hat sich ".$name." oder sein Teampartner für das Rennen: ".$race['Name']."angemeldet.<br>Kontakt: \"".$address."\"");
+	remove_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
+
+	return 1;
+}
+
+function getRaceObject($dbConnection, $raceID)
+{
+	$raceQuery = $dbConnection->query("SELECT * FROM  event WHERE ID = '$raceID'");
+	if ($raceQuery->num_rows > 0) 
+	{
+		return $raceQuery->fetch_assoc();
+	}
+}
+
+function createHTMLInvitation($name, $code)
+{
+	return "Hallo,<br>
+					zu wurdest soeben von $name zum DTSG-Rennen eingeladen.<br>
+					<br>
+					Um die Teilnahme zu bestätigen folge bitte diesem <a href='http://sporttrampen.de/rennanmeldung/?code=$code'>link</a>.<br>
+					Falls du dich auf unserer Homepage noch nicht registriert has, so hole dies bitte zunächst <a href='https://sporttrampen.de/registry'>hier</a> nach.<br>
+					<br>
+					Vielen Dank und bis bald.<br>
+					<br>
+					<br>
+					Deine DTSG";
+}
+
+function createHTMLConfirmation($name)
+{
+	return "Hallo $name,<br>
+					dies ist eine Anmeldebestätigung für das DTSG Rennen.<br>
+					Wir freuen uns auf das Rennen und deine Teilnahme.<br>
+					<br>
+					Wir sehen uns beim Rennen.<br>
+					<br>
+					<br>
+					Deine DTSG";
+}
+?>
+		<link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+		<script src="//code.jquery.com/jquery-1.10.2.js"></script>
+		<script src="//code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
+		<script>		
+			function includeRemoveTeampartner(team, teilnehmerIDs, teilnehmerNames) 
+			{
+				while (infotext0.hasChildNodes()) 
+				{
+					infotext0.removeChild(infotext0.lastChild);
+					infotext1.removeChild(infotext1.lastChild);
+					infotext2.removeChild(infotext2.lastChild);
+					email.removeChild(email.lastChild);
+			  	}
+			  	while (selection.hasChildNodes()) 
+					{
+					  selection.removeChild(selection.lastChild);
+			  	}
+			  	while (email.hasChildNodes()) 
+					{
+					  email.removeChild(email.lastChild);
+			  	}
+			  	if(team.value == 'team')
+		  		{
+					infotext0.appendChild(document.createTextNode("Schoen, dass du bereits eine(n) Teampartner(in) hast..."));
+					infotext1.appendChild(document.createTextNode("Wähle deine(n) Teampartner(in) aus den bisherigen Teilnehmern aus:"));
+					infotext2.appendChild(document.createTextNode("oder schick ihm/ihr eine E-Mail Einladung zum Rennen"));
+					var newDiv=document.createElement('div');
+					var html = "<select name='selection' onchange='disablePartnerEmail(this)'>", dates = teilnehmerNames, i;
+					html += "<option value='0'></option>";
+					for(i = 1; i < dates.length+1; i++) 
+					{
+						 html += "<option value="+teilnehmerIDs[i-1]+">"+dates[i-1]+"</option>";
+					}
+					html += '</select>';
+					newDiv.innerHTML= html;
+					document.getElementById('selection').appendChild(newDiv);
+					var mailDiv=document.createElement('div');
+					mailDiv.innerHTML = "<input type='text' size='40' maxlength='250' name='emailaddress'>";
+					document.getElementById('email').appendChild(mailDiv);
+				}
+			}
+			function disablePartnerEmail(partnerID)
+			{
+				while (email.hasChildNodes()) 
+				{
+				  email.removeChild(email.lastChild);
+		  	}
+		  	var mailDiv=document.createElement('div');
+		  	if(partnerID.value == '0')
+		  	{
+		  		mailDiv.innerHTML = "<input type='text' size='40' maxlength='250' name='emailaddress'>";
+		  	}
+		  	else
+		  	{
+		  		mailDiv.innerHTML = "<input type='text' size='40' maxlength='250' name='deactivatedEmail' value='DEAKTIVIERT, da Partner ausgewaehlt' disabled onclick=alertError()>";
+		  	}
+				document.getElementById('email').appendChild(mailDiv);
+			}
+		</script>
+		<div id="con">
+			<form action="?postMessage=1" method="post">
+				<p>Wir freuen uns, dass du dich für ein Rennen anmelden möchtest.</p>
+				<p>Bitte wähle das Rennen aus:</p>
+				<select name="race_id" id="race_id">
+					<?php
+						$dbConnection = (new DBConnector)->createDbConnection();
+						$query = "SELECT * FROM event where (eventtype = 1 || eventtype = 2) && Enddate > CURRENT_TIMESTAMP order by Startdate";
+						$statement = $dbConnection->query($query);
+						while($event = $statement->fetch_assoc()) 
+						{					
+							if($eventType["ID"] == 99)
+								continue;
+							echo '<option value="'. $event["ID"] .'">'. $event["Name"] .'</option>';
+						}
+						$query = "SELECT ID, name, email FROM teilnehmer ORDER BY name";
+						$statement = $dbConnection->query($query);
+						while($event = $statement->fetch_assoc()) 
+						{					
+							$teilnehmerID[] = $event["ID"];
+							$teilnehmerName[] = $event["name"];
+						}
+							echo "<script>\n";
+							echo "var javascript_teilnehmerIDs = ". json_encode($teilnehmerID) . ";\n";
+							echo "var javascript_teilnehmerNames= ". json_encode($teilnehmerName) . ";\n";
+							echo "</script>\n";
+					?>
+				</select>
+				<p>Hast du bereits einen Teampartner?</p>
+				<select name="team" id="team" onchange="includeRemoveTeampartner(this, javascript_teilnehmerIDs, javascript_teilnehmerNames)">
+					<option value='single'>Nein, ich möchte mich alleine anmelden</option>
+					<option value='team'>Ja, ich habe bereits einen Teampartner</option>
+				</select>
+				<div id="infotext0"></div>
+				<div id="infotext1"></div>
+				<div id="selection"></div>
+				<div id="infotext2"></div>
+				<div id="email"></div>
+		 		<br>
+				<br>
+				<input type="submit" value="Anmeldung abschicken">
+			</form> 
+		</div>
