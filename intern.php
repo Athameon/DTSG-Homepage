@@ -72,6 +72,7 @@ function printParticipentsOfFollowingEvents()
 	$dbConnection = (new DBConnector)->createDbConnection();
 
 	$query = "SELECT event.ID as eventID, event.Name as eventName, 
+						event.Startdate as startdate,
 						registrations.teamname as teamname, 
 						registrations.Teilnehmer1_ID as teilnehmer1, 
 						registrations.Teilnehmer2_ID as teilnehmer2, 
@@ -90,7 +91,12 @@ function printParticipentsOfFollowingEvents()
 		$participent1Object = getParticipantObject($dbConnection, $event["teilnehmer1"]);
 		$participent2Object = getParticipantObject($dbConnection, $event["teilnehmer2"]);
 		echo "<tr>
-				<td>$eventname<input name='teamname' size='15' value='".$event["teamname"]."' onblur='updateTeamname(".$event["registrationId"].", this)' disabled='true'></td>
+				<td>$eventname
+				<form action='?teamanmelden' method='post'>
+					<input type='text' name='teamname' value='".$event["teamname"]."'>
+					<input type='hidden' name='registrationId' value='".$event["registrationId"]."'>
+					<input type='submit' value='Team anmelden'>
+				</td>
 				<td><a href='mailto:".$participent1Object["email"]."'>".$participent1Object["name"]."</a><br>".$participent1Object["email"]."<br>".$participent1Object["mobilenumber"]."</td>
 				<td><a href='mailto:".$participent2Object["email"]."'>".$participent2Object["name"]."</a><br>".$participent2Object["email"]."<br>".$participent2Object["mobilenumber"]."<br>
 					<select name='team' id='team' onchange='includeRemoveTeampartner(".$participent1Object["ID"].", this, ".$event["eventID"].")'>
@@ -107,8 +113,7 @@ function printParticipentsOfFollowingEvents()
 					echo "<option value='0'>--delete--</option>
 					</select>
 				<i>".$event["teilnehmer2Unconfirmed"]."</i></td>
-				<td></td>
-			</tr>\n";
+			</tr>\n";	
 	}
 }
 
@@ -123,15 +128,12 @@ function getParticipantObject($dbConnection, $participantID)
 
 function changeMailPassword()
 {
-
 	$dbConnection = (new DBConnector)->createDbConnection();
 
 	$oldpasswort = $_POST['oldPW'];
 	$passwort = $_POST['newPW'];
 	$passwort2 = $_POST['newPW2'];
-
 	$email = $_POST['emailaddress'];
-
 	$userid = $_SESSION['userid'];
 
 	if (strlen($oldpasswort) == 0 && strlen($password) == 0 && strlen($passwort2) == 0 && strlen($email) == 0) 
@@ -155,72 +157,82 @@ function changeMailPassword()
 
 	if(strlen($email) != 0 )
 	{
-		if(!filter_var($email, FILTER_VALIDATE_EMAIL)) 
-		{
-		echo 'Bitte eine gültige E-Mail-Adresse eingeben<br>';
-		$mailerror = true;
-		}
-		if(!$mailerror)
-		{
-			$selectquery = "SELECT email FROM `teilnehmer` WHERE email = '$email' AND ID != '$userid'";
-			$statement = $dbConnection->query($selectquery);
-			if($statement->fetch_assoc() )
-			{
-				echo "Die eingegebene E-Mail-Adresse ist bereits vergeben. Bitte waehle eine andere.<br>";
-			}
-			else
-			{
-				$query = "UPDATE teilnehmer 
-							  Set email='$email'
-							  WHERE ID = '$userid'";
-				$statement = $dbConnection->query($query);
-			
-				if($statement) 
-				{		
-					echo "Deine E-Mail-Adresse wurde erfolgreich auf $email geändert.<br>";
-					header("Location: intern");
-				} 
-				else 
-				{
-					echo 'Beim ändern ist leider ein Fehler aufgetreten. Bitte wende dich an sporttrampen(a)gmail.com.<br>';
-				}
-			}
-		}
+		updateEMailAddress($dbConnection, $email, $userid);
 	}
 
 	if(!$error) 
 	{	
-		$passwort_hash = password_hash($passwort, PASSWORD_DEFAULT);
+		updatePassword($dbConnection, $userid, $passwort, $oldpasswort);
+	}
+}
 
-		$query = "SELECT * FROM teilnehmer WHERE ID = '$userid'";//Q7uzRoOdRn
-		$statement = $dbConnection->query($query);
-		$user = $statement->fetch_assoc();
-		
-		//Überprüfung des Passworts
-		if ($user !== false && password_verify($oldpasswort, $user['passwort'])) 
-		{			
+function updateEMailAddress($dbConnection, $email, $userid)
+{
+	if(!filter_var($email, FILTER_VALIDATE_EMAIL)) 
+	{
+	echo 'Bitte eine gültige E-Mail-Adresse eingeben<br>';
+	$mailerror = true;
+	}
+	if(!$mailerror)
+	{
+		$selectquery = "SELECT email FROM `teilnehmer` WHERE email = '$email' AND ID != '$userid'";
+		$statement = $dbConnection->query($selectquery);
+		if($statement->fetch_assoc() )
+		{
+			echo "Die eingegebene E-Mail-Adresse ist bereits vergeben. Bitte waehle eine andere.<br>";
+		}
+		else
+		{
 			$query = "UPDATE teilnehmer 
-							  Set passwort='$passwort_hash'
-							  WHERE ID = '$userid'";
+						  Set email='$email'
+						  WHERE ID = '$userid'";
 			$statement = $dbConnection->query($query);
 		
 			if($statement) 
 			{		
-				echo "Dein Passwort wurde erfolgreich geändert.";
+				echo "Deine E-Mail-Adresse wurde erfolgreich auf $email geändert.<br>";
 				header("Location: intern");
 			} 
 			else 
 			{
-				echo 'Beim Ändern ist leider ein Fehler aufgetreten. Bitte wende dich an sporttrampen(a)gmail.com.<br>';
+				echo 'Beim ändern ist leider ein Fehler aufgetreten. Bitte wende dich an sporttrampen(a)gmail.com.<br>';
 			}
+		}
+	}
+}
+
+function updatePassword($dbConnection, $userid, $passwort, $oldpasswort)
+{
+	$passwort_hash = password_hash($passwort, PASSWORD_DEFAULT);
+
+	$query = "SELECT * FROM teilnehmer WHERE ID = '$userid'";//Q7uzRoOdRn
+	$statement = $dbConnection->query($query);
+	$user = $statement->fetch_assoc();
+	
+	//Überprüfung des Passworts
+	if ($user !== false && password_verify($oldpasswort, $user['passwort'])) 
+	{			
+		$query = "UPDATE teilnehmer 
+						  Set passwort='$passwort_hash'
+						  WHERE ID = '$userid'";
+		$statement = $dbConnection->query($query);
+	
+		if($statement) 
+		{		
+			echo "Dein Passwort wurde erfolgreich geändert.";
+			header("Location: intern");
 		} 
 		else 
 		{
-			echo "Dein altes Passwort ist false. Bitte gebe es erneut ein.<br>";
+			echo 'Beim Ändern ist leider ein Fehler aufgetreten. Bitte wende dich an sporttrampen(a)gmail.com.<br>';
 		}
+	} 
+	else 
+	{
+		echo "Dein altes Passwort ist false. Bitte gebe es erneut ein.<br>";
 	}
-
 }
+
 function changeProfileSettings()
 {
 	$dbConnection = (new DBConnector)->createDbConnection();
@@ -241,6 +253,7 @@ function changeProfileSettings()
 	}
 
 }
+
 function updateTeampartner($firstParticipantId, $partnerId, $eventId)
 {
 	$dbConnection = (new DBConnector)->createDbConnection();
@@ -319,11 +332,6 @@ function insertParticipantInDB($dbConnection, $eventId, $articipantId)
 		document.body.appendChild(form);
 		form.submit();
 		document.body.removeChild(form);
-	}
-	function updateTeamname(registrationId, teamname)
-	{
-		alert(registrationId);
-		alert(teamname.value);
 	}
 	function displayChangeLoginDataToChange()
 	{
@@ -485,7 +493,7 @@ function insertParticipantInDB($dbConnection, $eventId, $articipantId)
 						echo "<option value='".$teilnehmer["ID"]."'>".$teilnehmer["name"]." ".$teilnehmer["lastname"]."</option>";
 					}
 					echo "</select>";
-					echo "</td><td></td></tr>";
+					echo "</td></tr>";
 				?>
 			</body></table>
 		</div>
