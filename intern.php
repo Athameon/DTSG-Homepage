@@ -65,38 +65,17 @@ if(isset($_GET['startRace']))
 						  		Teilnehmer2_ID = $Teilnehmer2_ID";
 			$statement = $dbConnection->query($query);
 		}
-
 	}
 }
 if (isset($_GET['updateTeamnames']))
 {
-	//echo file_get_contents('php://input');
-	echo $_POST['teams']."<br><br>";
-	$message = $_POST['teams'];
-	// Liefert: <body text='schwarz'>
-	$bodytag1 = str_replace("\\", "", $message);
-	//$bodytag2 = str_replace("\’", "'", $bodytag1);
-	//$bodytag = str_replace("\‘", "'", $bodytag2);
-	echo $bodytag1."<br>";
-	$testdata = "[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]";
-	echo "test: ".$testdata;
-	$data = json_decode($testdata, true);
+	$teamname = $_POST['teamname'];
+	$id =  $_POST['registrationId'];
+	$query = "UPDATE registrations 
+			  Set Teamname='$teamname'
+			  WHERE ID = $id";
+	$statement = $dbConnection->query($query);
 
-	echo $data[0]['id'];
-	//$message2 = substr($message, 3);
-	//$message3 = substr($message2, -3);
-	//echo "%27".$message3."%27";
-	//echo json_decode($_POST['teams']);
-	echo "<br>Update Teamname";
-	//echo $_POST['teams'];
-	//$json = file_get_contents('php://input');
-	//echo unescape($message);
-	$data = json_decode($bodytag, true);
-	//echo $data;
-	//print_r($data);
-	//echo $data;
-	//var_dump($_POST['teams']);
-	$data[0]['id'];
 }
  
 //Abfrage der Nutzer ID vom Login
@@ -169,9 +148,7 @@ function printParticipentsOfFollowingEvents()
 		echo "<tr>
 				<td>$eventname
 				<form action='?teamanmelden' method='post'>
-					<input type='text' id='".$event["registrationId"]."' name='teamname' value='".$event["teamname"]."' onfocusout='setTeamnames(".$event["registrationId"].", this)'>
-					<input type='hidden' name='registrationId' value='".$event["registrationId"]."'>
-					<input type='hidden' name='inResult' value='".$event["inResult"]."'>
+					<input type='text' name='teamname' value='".$event["teamname"]."' onchange='setTeamnames(".$event["registrationId"].", this.value)'>
 				</td>
 				<td><a href='mailto:".$participent1Object["email"]."'>".$participent1Object["name"]."</a><br>".$participent1Object["email"]."<br>".$participent1Object["mobilenumber"]."</td>
 				<td><a href='mailto:".$participent2Object["email"]."'>".$participent2Object["name"]."</a><br>".$participent2Object["email"]."<br>".$participent2Object["mobilenumber"]."<br>
@@ -375,25 +352,19 @@ function setTeamname($dbConnection, $registrationId, $teamname)
 }
 ?>
 	<script>
-	function setTeamnames(registrationId, teem)
+	function setTeamnames(registrationId, teamname)
 	{
-		var teams = document.getElementsByName("teamname");
-		var jsonstring ='[';
-		for(var x = 0; x < teams.length; x++) 
-		{    
-		    jsonstring += '{"id": ' + teams[x].id + ', "teamname": "' + teams[x].value + '"}, ';
-		}
-		jsonstring = jsonstring.substring(0, jsonstring.length - 2);
-		jsonstring +=']';
-		alert(escape(JSON.stringify("[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]")));
-        form = document.createElement("form"),
+		form = document.createElement("form"),
 		node = document.createElement("input");
 		var element1 = document.createElement("input");
 		form.method = "POST";
-		//element1.value = escape(JSON.stringify("[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]"));
-		element1.value = "[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]";
-		element1.name ="teams";
+		element1.value=registrationId;
+		element1.name="registrationId";
 		form.appendChild(element1);  
+    	var element2 = document.createElement("input");
+		element2.value=teamname;
+		element2.name="teamname";
+		form.appendChild(element2);
 		form.appendChild(node.cloneNode());
 		form.action = "?updateTeamnames";
 		form.style.display = "none";
