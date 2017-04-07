@@ -24,7 +24,57 @@ if (isset($_GET['insertParticipant']))
 {
 	insertParticipantInDB($dbConnection, $_POST['eventId'], $_POST['participantId']);
 }
+if(isset($_GET['teamanmelden']))
+{
+	if ($_POST['inResult'] == '1') 
+	{
+		addTeamToResultTable($dbConnection, $_POST['registrationId']);
+	}
+	else
+	{
+		setTeamname($dbConnection, $_POST['registrationId'], $_POST['teamname']);
+	}
+}
+if(isset($_GET['startRace']))
+{
+	$raceQuery = $dbConnection->query("SELECT * FROM event where Enddate > CURRENT_TIMESTAMP");
 
+	while($event = $raceQuery->fetch_assoc())
+	{
+		//echo "OKOKOK\n";
+	}
+	echo $_POST['event_id'];
+}
+if (isset($_GET['updateTeamnames']))
+{
+	//echo file_get_contents('php://input');
+	echo $_POST['teams']."<br><br>";
+	$message = $_POST['teams'];
+	// Liefert: <body text='schwarz'>
+	$bodytag1 = str_replace("\\", "", $message);
+	//$bodytag2 = str_replace("\’", "'", $bodytag1);
+	//$bodytag = str_replace("\‘", "'", $bodytag2);
+	echo $bodytag1."<br>";
+	$testdata = "[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]";
+	echo "test: ".$testdata;
+	$data = json_decode($testdata, true);
+
+	echo $data[0]['id'];
+	//$message2 = substr($message, 3);
+	//$message3 = substr($message2, -3);
+	//echo "%27".$message3."%27";
+	//echo json_decode($_POST['teams']);
+	echo "<br>Update Teamname";
+	//echo $_POST['teams'];
+	//$json = file_get_contents('php://input');
+	//echo unescape($message);
+	$data = json_decode($bodytag, true);
+	//echo $data;
+	//print_r($data);
+	//echo $data;
+	//var_dump($_POST['teams']);
+	$data[0]['id'];
+}
  
 //Abfrage der Nutzer ID vom Login
 $userid = $_SESSION['userid'];
@@ -56,6 +106,7 @@ if(isset($_GET['changeSettings']))
 	changeProfileSettings();
 }
 
+
 $dbConnection->close();
 
 //----------------
@@ -77,7 +128,8 @@ function printParticipentsOfFollowingEvents()
 						registrations.Teilnehmer1_ID as teilnehmer1, 
 						registrations.Teilnehmer2_ID as teilnehmer2, 
 						registrations.Teilnehmer2_Email as teilnehmer2Unconfirmed,
-						registrations.ID as registrationId
+						registrations.ID as registrationId,
+						registrations.inResult as inResult
 					from event, registrations
 			  		where event.ID = registrations.Event_ID AND
 			  				event.Enddate >= CURRENT_TIMESTAMP";
@@ -90,12 +142,13 @@ function printParticipentsOfFollowingEvents()
 		//$teamname = $event["teamname"];
 		$participent1Object = getParticipantObject($dbConnection, $event["teilnehmer1"]);
 		$participent2Object = getParticipantObject($dbConnection, $event["teilnehmer2"]);
+
 		echo "<tr>
 				<td>$eventname
 				<form action='?teamanmelden' method='post'>
-					<input type='text' name='teamname' value='".$event["teamname"]."'>
+					<input type='text' id='".$event["registrationId"]."' name='teamname' value='".$event["teamname"]."' onfocusout='setTeamnames(".$event["registrationId"].", this)'>
 					<input type='hidden' name='registrationId' value='".$event["registrationId"]."'>
-					<input type='submit' value='Team anmelden'>
+					<input type='hidden' name='inResult' value='".$event["inResult"]."'>
 				</td>
 				<td><a href='mailto:".$participent1Object["email"]."'>".$participent1Object["name"]."</a><br>".$participent1Object["email"]."<br>".$participent1Object["mobilenumber"]."</td>
 				<td><a href='mailto:".$participent2Object["email"]."'>".$participent2Object["name"]."</a><br>".$participent2Object["email"]."<br>".$participent2Object["mobilenumber"]."<br>
@@ -287,8 +340,44 @@ function insertParticipantInDB($dbConnection, $eventId, $articipantId)
 	$query = "INSERT INTO registrations (Event_ID, Teilnehmer1_ID) VALUES ('$eventId', '$articipantId')";
 	$statement = $dbConnection->query($query);
 }
+
+function addTeamToResultTable($dbConnection, $registrationId)
+{
+	echo "Add team to result table: registrationId: ".$registrations;
+}
+
+function setTeamname($dbConnection, $registrationId, $teamname)
+{
+	echo "Set teamname: registrationId:".$registrationId."; Teamname:".$teamname;
+}
 ?>
 	<script>
+	function setTeamnames(registrationId, teem)
+	{
+		var teams = document.getElementsByName("teamname");
+		var jsonstring ='[';
+		for(var x = 0; x < teams.length; x++) 
+		{    
+		    jsonstring += '{"id": ' + teams[x].id + ', "teamname": "' + teams[x].value + '"}, ';
+		}
+		jsonstring = jsonstring.substring(0, jsonstring.length - 2);
+		jsonstring +=']';
+		alert(escape(JSON.stringify("[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]")));
+        form = document.createElement("form"),
+		node = document.createElement("input");
+		var element1 = document.createElement("input");
+		form.method = "POST";
+		//element1.value = escape(JSON.stringify("[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]"));
+		element1.value = "[{'id': 110, 'teamname': 'first'}, {'id': 140, 'teamname': 'second'}]";
+		element1.name ="teams";
+		form.appendChild(element1);  
+		form.appendChild(node.cloneNode());
+		form.action = "?updateTeamnames";
+		form.style.display = "none";
+		document.body.appendChild(form);
+		form.submit();
+		document.body.removeChild(form);
+	}
 	function includeRemoveTeampartner(firstParticipant, secondParticipant, eventId) 
 	{
 		form = document.createElement("form"),
@@ -384,6 +473,33 @@ function insertParticipantInDB($dbConnection, $eventId, $articipantId)
 		mailDiv.innerHTML = "<input style='height:70px;' type='submit' value='Änderung(en) jetzt abschicken'>";
 		document.getElementById('submitLogin2').appendChild(mailDiv);
 	}
+	function startRace()
+	{
+		removeAllOpenFields();
+		<?php 
+			$dbConnection = (new DBConnector)->createDbConnection();
+			//$selectquery = "SELECT count('id') from event where enddate > CURRENT_TIMESTAMP";
+			$selectquery = "SELECT * FROM event where enddate > CURRENT_TIMESTAMP";
+			$statement = $dbConnection->query($selectquery);
+			//$event = $statement->fetch_assoc();
+			/*if ($event['id'] == '1')
+			{
+				echo "only one event ...";
+			}*/
+			$selectiontext = "<select name='event_id' id='event_id'>";
+			while($singleEvent = $statement->fetch_assoc())
+			{
+				$selectiontext = $selectiontext."<option value=".$singleEvent['ID'].">".$singleEvent['Name']."</option>";
+			}
+			$selectiontext = $selectiontext."</select>";
+		?>
+		var mailDiv=document.createElement('div');
+		mailDiv.innerHTML = "<?php echo $selectiontext?>";
+		document.getElementById('selectionHeadder').appendChild(mailDiv);
+		var mailDiv=document.createElement('div');
+		mailDiv.innerHTML = "<input style='height:70px;' type='submit' value='Rennen jetzt starten'>";
+		document.getElementById('submitStartRace').appendChild(mailDiv);
+	}
 	function removeAllOpenFields()
 	{
 		while(infoEMail.hasChildNodes())
@@ -457,8 +573,12 @@ function insertParticipantInDB($dbConnection, $eventId, $articipantId)
 		<form action="../newPost" method="post">
  			<input style="width:100%;height:50px" type="submit" value="Eine Nachricht/Event auf der Homepage und dem E-Mail-Verteiler veroeffentlichen" > <br>
 		</form>
-		<form action="../executeRace" method="post">
- 			<input style="width:100%;height:50px" type="submit" value="Ein Rennen Starten" > <br>
+		<!--<form action="../executeRace" method="post">-->
+ 			<input style="width:100%;height:50px" type="submit" value="Ein Rennen starten" onclick="startRace()">
+
+		<form action="?startRace=1" method="post">
+			<div id="selectionHeadder"></div>
+			<div id="submitStartRace" style="text-align:center"></div>
 		</form>
 		<form action="../finishRace" method="post">
  			<input style="width:100%;height:50px" type="submit" value="Ein Rennen Abschließe" > <br>
@@ -497,4 +617,4 @@ function insertParticipantInDB($dbConnection, $eventId, $articipantId)
 				?>
 			</body></table>
 		</div>
-	<?php } ?>
+	<?php } ?>	
