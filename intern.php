@@ -37,11 +37,17 @@ if(isset($_GET['teamanmelden']))
 }
 if(isset($_GET['startRace']))
 {
-	$raceQuery = $dbConnection->query("SELECT * FROM event where Enddate > CURRENT_TIMESTAMP");
+	$eventId = $_POST['event_id'];
+	$raceQuery = $dbConnection->query("SELECT * FROM registrations where Event_ID = $eventId");
 
 	while($event = $raceQuery->fetch_assoc())
 	{
-		//echo "OKOKOK\n";
+		$teamname = $event['Teamname'];
+		$Teilnehmer1_ID = $event['Teilnehmer1_ID'];
+		$Teilnehmer2_ID = $event['Teilnehmer2_ID'];
+		$query = "INSERT INTO result (Teamname, Teilnehmer1_ID, Teilnehmer2_ID, Event_ID) VALUES ('$teamname', '$Teilnehmer1_ID', '$Teilnehmer2_ID', '$eventId')";
+		echo $query."\n";
+		$dbConnection->query($query);
 	}
 	echo $_POST['event_id'];
 }
