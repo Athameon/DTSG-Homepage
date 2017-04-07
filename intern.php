@@ -39,17 +39,34 @@ if(isset($_GET['startRace']))
 {
 	$eventId = $_POST['event_id'];
 	$raceQuery = $dbConnection->query("SELECT * FROM registrations where Event_ID = $eventId");
-
 	while($event = $raceQuery->fetch_assoc())
 	{
+		//Test whether the curreent team is already in the result table for the current race
 		$teamname = $event['Teamname'];
 		$Teilnehmer1_ID = $event['Teilnehmer1_ID'];
 		$Teilnehmer2_ID = $event['Teilnehmer2_ID'];
-		$query = "INSERT INTO result (Teamname, Teilnehmer1_ID, Teilnehmer2_ID, Event_ID) VALUES ('$teamname', '$Teilnehmer1_ID', '$Teilnehmer2_ID', '$eventId')";
-		echo $query."\n";
-		$dbConnection->query($query);
+		$countText = $dbConnection->query("SELECT count(*) as count 
+											FROM result 
+											where Event_ID = $eventId AND 
+											Teilnehmer1_ID = $Teilnehmer1_ID AND 
+											Teilnehmer2_ID = $Teilnehmer2_ID");
+		$result = $countText->fetch_assoc();
+		if ($result['count'] == 0) 
+		{
+			$query = "INSERT INTO result (Teamname, Teilnehmer1_ID, Teilnehmer2_ID, Event_ID) VALUES ('$teamname', '$Teilnehmer1_ID', '$Teilnehmer2_ID', '$eventId')";
+			$dbConnection->query($query);
+		}
+		else
+		{
+			$query = "UPDATE result 
+						  Set Teamname='$teamname'
+						  WHERE Event_ID = $eventId AND 
+						  		Teilnehmer1_ID = $Teilnehmer1_ID AND 
+						  		Teilnehmer2_ID = $Teilnehmer2_ID";
+			$statement = $dbConnection->query($query);
+		}
+
 	}
-	echo $_POST['event_id'];
 }
 if (isset($_GET['updateTeamnames']))
 {
