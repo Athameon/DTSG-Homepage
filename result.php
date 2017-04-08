@@ -6,7 +6,7 @@ require 'wp-includes/class.DBConnector.php';
 
 function printRaceResults($dbConnection)
 {
-	$raceQuery = $dbConnection->query("SELECT id, name, link, eventtype FROM event");
+	$raceQuery = $dbConnection->query("SELECT id, name, link, eventtype FROM event ORDER BY Enddate DESC");
 	if ($raceQuery->num_rows > 0) 
 	{
 		while($raceInfo = $raceQuery->fetch_assoc()) 
@@ -43,7 +43,7 @@ function printEachRace($dbConnection, $raceInfo)
 function printRaceHeadder($raceID, $raceName, $raceLink)
 {
   echo "<tr> <td colspan='4'><h3 style='text-align: left;'>\n";
-  echo "$raceID. Rennen: <a target='_parent' href='$raceLink'>$raceName</a></h2>\n";
+  echo "Rennen: <a target='_parent' href='$raceLink'>$raceName</a></h2>\n";
 }
 
 function getOrderedRaceResults($event_id, $dbConnection)
