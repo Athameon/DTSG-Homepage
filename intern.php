@@ -51,12 +51,12 @@ if(isset($_GET['startRace']))
 											Teilnehmer1_ID = $Teilnehmer1_ID AND 
 											Teilnehmer2_ID = $Teilnehmer2_ID");
 		$result = $countText->fetch_assoc();
-		if ($result['count'] == 0) 
+		if ($result['count'] == 0) //Copies teams from registration to result because they don't exist at that moment in that table
 		{
 			$query = "INSERT INTO result (Teamname, Teilnehmer1_ID, Teilnehmer2_ID, Event_ID) VALUES ('$teamname', '$Teilnehmer1_ID', '$Teilnehmer2_ID', '$eventId')";
 			$dbConnection->query($query);
 		}
-		else
+		else   //Updates teamnames in result table because the team already exist in the result table
 		{
 			$query = "UPDATE result 
 						  Set Teamname='$teamname'
@@ -134,7 +134,7 @@ function printParticipentsOfFollowingEvents()
 						registrations.inResult as inResult
 					from event, registrations
 			  		where event.ID = registrations.Event_ID AND
-			  				event.Enddate >= CURRENT_TIMESTAMP";
+			  				event.Enddate >= NOW() - INTERVAL 7 DAY";
 	$statement = $dbConnection->query($query);
 
 	while($event = $statement->fetch_assoc()) 
@@ -166,7 +166,7 @@ function printParticipentsOfFollowingEvents()
 					echo "<option value='0'>--delete--</option>
 					</select>
 				<i>".$event["teilnehmer2Unconfirmed"]."</i></td>
-			</tr>\n";	
+			</tr>\n";
 	}
 }
 
